@@ -35,6 +35,7 @@ public class KotlinInlineFilterTest extends FilterTestBase {
 
 	@Test
 	public void should_filter() {
+		context.sourceFileName = "callsite.kt";
 		context.sourceDebugExtension = "" //
 				+ "SMAP\n" //
 				+ "callsite.kt\n" //
@@ -51,15 +52,7 @@ public class KotlinInlineFilterTest extends FilterTestBase {
 				+ "1#1,8:1\n" //
 				+ "2#2,2:9\n" //
 				+ "2#3,2:11\n" //
-				+ "*E\n" //
-				+ "*S KotlinDebug\n" //
-				+ "*F\n" //
-				+ "+ 1 callsite.kt\n" //
-				+ "CallsiteKt\n" //
-				+ "*L\n" //
-				+ "2#1,2:9\n" //
-				+ "3#1,2:11\n" //
-				+ "*E";
+				+ "*E\n"; //
 		context.classAnnotations
 				.add(KotlinGeneratedFilter.KOTLIN_METADATA_DESC);
 
@@ -100,6 +93,44 @@ public class KotlinInlineFilterTest extends FilterTestBase {
 	}
 
 	@Test
+	public void should_filter_when_in_same_file() {
+		context.sourceFileName = "callsite.kt";
+		context.sourceDebugExtension = "" //
+				+ "SMAP\n" //
+				+ "callsite.kt\n" //
+				+ "Kotlin\n" //
+				+ "*S Kotlin\n" //
+				+ "*F\n" //
+				+ "+ 1 callsite.kt\n" //
+				+ "CallsiteKt\n" //
+				+ "*L\n" //
+				+ "1#1,33:1\n" //
+				+ "22#1,2:34\n" //
+				+ "*E\n"; //
+		context.classAnnotations
+				.add(KotlinGeneratedFilter.KOTLIN_METADATA_DESC);
+
+		m.visitLineNumber(28, new Label());
+		m.visitInsn(Opcodes.NOP);
+
+		m.visitLineNumber(34, new Label());
+		shouldIgnorePrevious(m);
+		m.visitMethodInsn(Opcodes.INVOKESTATIC, "Stubs", "nop", "()V", false);
+		shouldIgnorePrevious(m);
+		m.visitLineNumber(35, new Label());
+		shouldIgnorePrevious(m);
+		m.visitInsn(Opcodes.NOP);
+		shouldIgnorePrevious(m);
+
+		m.visitLineNumber(30, new Label());
+		m.visitInsn(Opcodes.RETURN);
+
+		filter.filter(m, context, output);
+
+		assertIgnored(expectedRanges.toArray(new Range[0]));
+	}
+
+	@Test
 	public void should_not_parse_SourceDebugExtension_attribute_when_no_kotlin_metadata_annotation() {
 		context.sourceDebugExtension = "SMAP";
 
@@ -127,11 +158,7 @@ public class KotlinInlineFilterTest extends FilterTestBase {
 	@Test
 	public void should_throw_exception_when_SMAP_incomplete() {
 		context.sourceDebugExtension = "" //
-				+ "SMAP\n" //
-				+ "callsite.kt\n" //
-				+ "Kotlin\n" //
-				+ "*S Kotlin\n" //
-				+ "*F\n";
+				+ "SMAP\n";
 		context.classAnnotations
 				.add(KotlinGeneratedFilter.KOTLIN_METADATA_DESC);
 
@@ -140,6 +167,49 @@ public class KotlinInlineFilterTest extends FilterTestBase {
 			fail("exception expected");
 		} catch (final IllegalStateException e) {
 			assertEquals("Unexpected SMAP line: null", e.getMessage());
+		}
+	}
+
+	@Test
+	public void should_throw_exception_when_unexpected_FileInfo() {
+		context.sourceFileName = "callsite.kt";
+		context.sourceDebugExtension = "" //
+				+ "SMAP\n" //
+				+ "callsite.kt\n" //
+				+ "Kotlin\n" //
+				+ "*S Kotlin\n" //
+				+ "*F\n" //
+				+ "xxx";
+		context.classAnnotations
+				.add(KotlinGeneratedFilter.KOTLIN_METADATA_DESC);
+
+		try {
+			filter.filter(m, context, output);
+			fail("exception expected");
+		} catch (final IllegalStateException e) {
+			assertEquals("Unexpected SMAP line: xxx", e.getMessage());
+		}
+	}
+
+	@Test
+	public void should_throw_exception_when_unexpected_LineInfo() {
+		context.sourceFileName = "callsite.kt";
+		context.sourceDebugExtension = "" //
+				+ "SMAP\n" //
+				+ "callsite.kt\n" //
+				+ "Kotlin\n" //
+				+ "*S Kotlin\n" //
+				+ "*F\n" //
+				+ "*L\n" //
+				+ "xxx";
+		context.classAnnotations
+				.add(KotlinGeneratedFilter.KOTLIN_METADATA_DESC);
+
+		try {
+			filter.filter(m, context, output);
+			fail("exception expected");
+		} catch (final IllegalStateException e) {
+			assertEquals("Unexpected SMAP line: xxx", e.getMessage());
 		}
 	}
 
